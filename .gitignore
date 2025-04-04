@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Root environment file (IMPORTANT)
+.env
+
+# Backend specific
+backend/.env
+backend/db/
+backend/venv/
+
+# Frontend specific
+frontend/node_modules/
+frontend/.env
+frontend/.env.local
+frontend/dist/
+frontend/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursorrules
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+data/vector_store/ 
