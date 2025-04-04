@@ -40,7 +40,11 @@ class Settings(BaseSettings):
         return self.litepaper_src_dir.split("/")[-1]
 
     class Config:
-        env_file = ROOT_DIR / '.env'
+        # Load public config first, then secrets/overrides
+        env_file = (
+            ROOT_DIR / '.env.public',
+            ROOT_DIR / '.env'
+        )
         env_file_encoding = 'utf-8'
         extra = 'ignore'
 
