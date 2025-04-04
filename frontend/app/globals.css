@@ -30,25 +30,26 @@
     --radius: 0.5rem;
   }
   .dark {
-    --background: 210 4% 11%;
+    --background: 220 0% 12%;
     --foreground: 0 0% 98%;
-    --card: 210 4% 11%;
+    --card: 220 0% 12%;
     --card-foreground: 0 0% 98%;
-    --popover: 210 4% 11%;
+    --popover: 220 0% 12%;
     --popover-foreground: 0 0% 98%;
     --primary: 0 0% 98%;
-    --primary-foreground: 210 4% 11%;
-    --secondary: 215 5% 27%;
+    --primary-foreground: 220 0% 12%;
+    --secondary: 215 0% 22%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 215 5% 27%;
-    --muted-foreground: 220 4% 56%;
-    --accent: 215 5% 27%;
+    --muted: 215 0% 22%;
+    --muted-foreground: 215 0% 47%;
+    --accent: 215 0% 22%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 217 6% 36%;
-    --input: 217 6% 36%;
-    --ring: 217 6% 45%;
+    --border: 217 0% 27%;
+    --input: 217 0% 27%;
+    --ring: 217 0% 27%;
+    --tw-ring-color: hsl(var(--ring)) !important;
   }
 }
 @layer base {
@@ -58,4 +59,22 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* --- Force Theme Variable Overrides --- */
+/* Target Composer Root (assuming it's identifiable this way, may need adjustment) */
+.dark [data-assistant-ui-primitive="ComposerPrimitive.Root"] {
+  background-color: hsl(var(--secondary)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Target Suggestion Buttons */
+.dark [data-assistant-ui-primitive="ThreadPrimitive.Suggestion"] {
+  border-color: hsl(var(--border)) !important;
+}
+.dark [data-assistant-ui-primitive="ThreadPrimitive.Suggestion"]:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+.dark [data-assistant-ui-primitive="ThreadPrimitive.Suggestion"] span {
+  color: hsl(var(--foreground)) !important;
 }

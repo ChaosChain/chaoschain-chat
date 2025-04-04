@@ -55,6 +55,9 @@ const config = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        blue: {
+          '500': 'hsl(var(--ring))',
+        },
       },
     },
     plugins: ['require("tailwindcss-animate")'],
