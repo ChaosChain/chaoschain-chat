@@ -10,6 +10,10 @@ import subprocess
 from typing import AsyncGenerator, Union, List, Literal, Optional, Dict
 import json
 from pydantic import BaseModel, Field, ValidationError
+# --- LLM Preprocessing Imports ---
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+# --- End LLM Imports ---
 
 # --- MOVED Pydantic Model Definitions HERE ---
 # Model for complex content parts (like text)
@@ -86,6 +90,13 @@ async def stream_answer(query: str, rag_service: RAGService) -> AsyncGenerator[s
         sources = result.get("sources", [])
         print(f"[Stream] RAG Service returned: Answer=\"{answer}\", Sources Count={len(sources)}")
 
+        # --- Check for "I don't know" and replace --- 
+        if answer.strip().lower() == "i don't know.":
+            answer = ("I couldn't find specific information about that in the Chaos Chain litepaper. "
+                      "Could you try rephrasing or asking about a different topic covered in the document?")
+            print(f"[Stream] Replaced answer with custom message.")
+        # --------------------------------------------
+
         # --- Stream Text Chunks --- 
         # Simple word-by-word streaming for demonstration
         words = answer.split(' ')
@@ -120,6 +131,54 @@ async def stream_answer(query: str, rag_service: RAGService) -> AsyncGenerator[s
     finally:
         print("--- EXITING stream_answer --- ")
         print("[Stream] Finished streaming.")
+
+# --- Add LLM Preprocessing Function --- 
+async def preprocess_query(query: str) -> str:
+    """Uses an LLM to correct grammar and spelling in the user query."""
+    print(f"[Preprocess] Original query: {query}")
+    try:
+        # Use the same chat model configured for the RAG service
+        # Explicitly pass the API key from settings
+        llm = ChatOpenAI(
+            model=settings.openai_chat_model, 
+            temperature=0, 
+            openai_api_key=settings.openai_api_key
+        )
+        
+        messages = [
+            SystemMessage(
+                content=(
+                    "You are a helpful assistant. Your primary task is to correct grammar and spelling mistakes in the user's input, focusing on the topic 'Chaos Chain'. "
+                    "Correct potential typos towards 'Chaos' or 'Chain' where appropriate. "
+                    "However, if the input is a short phrase that appears to be an instruction or follow-up command related to the previous context (e.g., 'eli5', 'summarize', 'explain more', 'in simple terms'), recognize this intent. "
+                    "In such cases, return the instruction itself, perhaps normalized (e.g., 'Explain like I am 5' for 'eli5'), rather than correcting it or generating a response. "
+                    "For standard queries needing correction, perform the correction. "
+                    "Return ONLY the processed text (corrected query or instruction), with no preamble."
+                )
+            ),
+            HumanMessage(content=query),
+        ]
+        
+        response = await llm.ainvoke(messages)
+        corrected_query = response.content
+        
+        # Basic check to ensure we got a string back
+        if not isinstance(corrected_query, str):
+            print("[Preprocess] Warning: LLM did not return a string. Using original query.")
+            return query
+
+        # Optional: Log if correction changed the query
+        if corrected_query.strip().lower() != query.strip().lower():
+             print(f"[Preprocess] Corrected query: {corrected_query}")
+        else:
+             print("[Preprocess] No corrections needed.")
+
+        return corrected_query.strip()
+        
+    except Exception as e:
+        print(f"[Preprocess] Error during preprocessing: {e}. Using original query.")
+        return query # Fallback to original query on error
+# --- End Preprocessing Function ---
 
 @app.post("/api/chat")
 async def handle_chat_request(
@@ -159,10 +218,15 @@ async def handle_chat_request(
         print("[API] Validation Error: Query is empty or invalid content structure")
         raise HTTPException(status_code=400, detail="Query cannot be empty or content structure is invalid")
 
+    # --- Preprocess Query --- 
+    corrected_query = await preprocess_query(query)
+    # ----------------------
+
     print("--- BEFORE StreamingResponse --- ")
     print("[API] Returning StreamingResponse formatted for Vercel AI SDK")
     return StreamingResponse(
-        stream_answer(query, rag_service_instance),
+        # Use the corrected query
+        stream_answer(corrected_query, rag_service_instance),
         media_type="text/plain"
     )
 
