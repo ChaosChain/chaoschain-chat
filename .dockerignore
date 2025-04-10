@@ -1,0 +1,38 @@
+# Git files
+.git
+
+# Docker files
+Dockerfile*
+docker-compose.yml
+.dockerignore
+
+# Python virtual environment
+backend/venv/
+
+# Python cache
+**/__pycache__/
+*.pyc
+
+# Node dependencies
+frontend/node_modules/
+
+# Next.js build output
+frontend/.next/
+
+# Local data (vector stores, cloned repos, etc.)
+backend/data/
+
+# OS generated files
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env files (handle secrets via compose)
+.env
+.env.local
+
+# Editor/IDE specific
+.vscode/
+.idea/ 

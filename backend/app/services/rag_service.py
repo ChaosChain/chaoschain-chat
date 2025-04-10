@@ -5,6 +5,7 @@ from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
 from langchain.docstore.document import Document
 from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 import subprocess
 from pathlib import Path
 import os
@@ -26,7 +27,6 @@ from app.core.config import settings
 
 # --- Enhanced Logging --- 
 import logging
-import os # Added for listdir
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 # ----------------------
@@ -84,34 +84,18 @@ class RAGService:
         logger.info("--- RAGService Initialization Complete ---")
 
     def _load_or_create_vector_store(self) -> Chroma:
-        logger.info(f"Vector store check. Target directory: {self.vector_db_dir.resolve()}") # Log absolute path
-        if self.vector_db_dir.exists():
+        logger.info(f"Attempting to load vector store from: {self.vector_db_dir}")
+        if self.vector_db_dir.exists() and any(self.vector_db_dir.iterdir()):
+            logger.info("Existing vector store found. Loading...")
             try:
-                # List some files to check content before loading
-                vector_files = os.listdir(self.vector_db_dir)
-                logger.info(f"Existing vector store directory found. Contains {len(vector_files)} items. Sample: {vector_files[:5]}")
+                vector_store = Chroma(persist_directory=str(self.vector_db_dir), embedding_function=self.embedding)
+                logger.info("Vector store loaded successfully.")
+                return vector_store
             except Exception as e:
-                logger.error(f"Could not list files in existing vector store directory {self.vector_db_dir}: {e}")
-
-            if any(self.vector_db_dir.iterdir()): # Check if not empty
-                logger.info("Attempting to load vector store...")
-                try:
-                    vector_store = Chroma(persist_directory=str(self.vector_db_dir), embedding_function=self.embedding)
-                    logger.info("Vector store loaded successfully.")
-                    # Add another check after loading
-                    try:
-                        vector_files_after = os.listdir(self.vector_db_dir)
-                        logger.info(f"Vector store dir state after load: {len(vector_files_after)} items. Sample: {vector_files_after[:5]}")
-                    except Exception as e:
-                         logger.error(f"Could not list files after loading vector store: {e}")
-                    return vector_store
-                except Exception as e:
-                    logger.error(f"Error loading existing vector store: {e}. Attempting to recreate.")
-                    # Optionally remove corrupted dir: shutil.rmtree(self.vector_db_dir)
-        else:
-             logger.warning(f"Vector store directory {self.vector_db_dir} does not exist.")
+                logger.error(f"Error loading existing vector store: {e}. Attempting to recreate.")
+                # Optionally remove corrupted dir: shutil.rmtree(self.vector_db_dir)
         
-        logger.warning(f"Proceeding to create new vector store...")
+        logger.warning(f"Vector store not found or empty at {self.vector_db_dir}. Creating new store...")
         docs = self._load_documents()
         logger.info(f"Loaded {len(docs)} documents.")
         if not docs:
@@ -128,55 +112,37 @@ class RAGService:
             persist_directory=str(self.vector_db_dir)
         )
         logger.info("New vector store created and persisted.")
-        # Add check after creation
-        try:
-            vector_files_after_create = os.listdir(self.vector_db_dir)
-            logger.info(f"Vector store dir state after creation: {len(vector_files_after_create)} items. Sample: {vector_files_after_create[:5]}")
-        except Exception as e:
-             logger.error(f"Could not list files after creating vector store: {e}")
         return vector_store
 
     def _load_documents(self) -> List[Any]: # Return type depends on loader
         logger.info(f"Loading documents from source: {self.litepaper_src_dir}")
-        repo_dir = None # Initialize repo_dir
-
         if settings.is_github_repo:
             repo_name = settings.repo_name
             if not repo_name:
                 raise ValueError("Could not determine repository name from source URL.")
             repo_dir = Path("data/repos") / repo_name
-            logger.info(f"GitHub repository processing. Target directory: {repo_dir.resolve()}") # Log absolute path
-
+            logger.info(f"GitHub repository detected. Cloning/updating to: {repo_dir}")
+            
             if not repo_dir.exists():
                 logger.info("Cloning repository...")
                 try:
-                    # Clone only the main branch with limited depth for speed
-                    loader = GitLoader(clone_url=self.litepaper_src_dir, repo_path=str(repo_dir), branch="main") # file_filter could be added
+                    # Ensure the target directory exists
+                    repo_dir.parent.mkdir(parents=True, exist_ok=True)
+                    # Clone the repository
+                    logger.info(f"Cloning repository {self.litepaper_src_dir} to {repo_dir}...")
+                    loader = GitLoader(clone_url=self.litepaper_src_dir, repo_path=str(repo_dir), branch="master")
                     docs = loader.load()
                     logger.info(f"Repository cloned. Loaded {len(docs)} files.")
-                    # --- Add check after clone ---
-                    try:
-                        repo_files = os.listdir(repo_dir)
-                        logger.info(f"Cloned repo directory state: {len(repo_files)} items. Sample: {repo_files[:5]}")
-                    except Exception as e:
-                        logger.error(f"Could not list files in cloned repo directory {repo_dir}: {e}")
-                    # --------------------------
                     return docs
                 except Exception as e:
                     logger.error(f"Error cloning repository: {e}")
                     raise
             else:
-                logger.info("Repository directory exists. Attempting to update...")
+                logger.info("Repository exists. Attempting to update...")
                 update_repository(repo_dir) # Assumes update_repository logs its own errors
-                # --- Add check after update attempt ---
-                try:
-                    repo_files = os.listdir(repo_dir)
-                    logger.info(f"Existing repo directory state after update attempt: {len(repo_files)} items. Sample: {repo_files[:5]}")
-                except Exception as e:
-                    logger.error(f"Could not list files in existing repo directory {repo_dir} after update attempt: {e}")
-                # -----------------------------------
                 logger.info("Loading from existing repository path...")
-                loader = GitLoader(repo_path=str(repo_dir), branch="main")
+                # Pass the branch name when loading from existing repo too
+                loader = GitLoader(repo_path=str(repo_dir), branch="master")
                 docs = loader.load()
                 logger.info(f"Loaded {len(docs)} files from existing repo.")
                 return docs
@@ -279,10 +245,13 @@ class RAGService:
 _rag_service_instance: RAGService | None = None
 
 def get_rag_service() -> RAGService:
-    # ... (existing get_rag_service code) ...
-
-# Create a single instance
-rag_service = RAGService()
-
-async def get_rag_service():
-    return rag_service 
+    # Indent the following lines correctly
+    global _rag_service_instance
+    logger.info("get_rag_service called")
+    if _rag_service_instance is None:
+        logger.info("No existing RAGService instance found, creating new one...")
+        _rag_service_instance = RAGService() # This line and subsequent lines were likely unindented
+        logger.info("New RAGService instance created.")
+    else:
+        logger.info("Returning existing RAGService instance.")
+    return _rag_service_instance

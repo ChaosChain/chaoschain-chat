@@ -85,32 +85,32 @@ const ThreadWelcomeSuggestions: FC = () => {
   return (
     <div className="mt-3 flex w-full items-stretch justify-center gap-4">
       <ThreadPrimitive.Suggestion
-        className="border-border hover:bg-accent flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
+        className="border-zinc-700 hover:bg-zinc-800 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
         prompt="What is ChaosChain?"
         method="replace"
         autoSend
       >
-        <span className="text-foreground line-clamp-2 text-ellipsis text-sm font-semibold">
+        <span className="text-zinc-100 line-clamp-2 text-ellipsis text-sm font-semibold">
           What is ChaosChain?
         </span>
       </ThreadPrimitive.Suggestion>
       <ThreadPrimitive.Suggestion
-        className="border-border hover:bg-accent flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
+        className="border-zinc-700 hover:bg-zinc-800 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
         prompt="What problem does ChaosChain solve?"
         method="replace"
         autoSend
       >
-        <span className="text-foreground line-clamp-2 text-ellipsis text-sm font-semibold">
+        <span className="text-zinc-100 line-clamp-2 text-ellipsis text-sm font-semibold">
           What problem does ChaosChain solve?
         </span>
       </ThreadPrimitive.Suggestion>
       <ThreadPrimitive.Suggestion
-        className="border-border hover:bg-accent flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
+        className="border-zinc-700 hover:bg-zinc-800 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
         prompt="How are new chains created?"
         method="replace"
         autoSend
       >
-        <span className="text-foreground line-clamp-2 text-ellipsis text-sm font-semibold">
+        <span className="text-zinc-100 line-clamp-2 text-ellipsis text-sm font-semibold">
           How are new chains created?
         </span>
       </ThreadPrimitive.Suggestion>
@@ -120,12 +120,12 @@ const ThreadWelcomeSuggestions: FC = () => {
 
 const Composer: FC = () => {
   return (
-    <ComposerPrimitive.Root className="border-border bg-secondary flex w-full flex-wrap items-end rounded-lg border px-2.5 shadow-sm transition-colors ease-in">
+    <ComposerPrimitive.Root className="border-zinc-700 bg-zinc-800 flex w-full flex-wrap items-end rounded-lg border px-2.5 shadow-sm transition-colors ease-in">
       <ComposerPrimitive.Input
         rows={1}
         autoFocus
         placeholder="Write a message..."
-        className="text-foreground placeholder:text-muted-foreground max-h-40 flex-grow resize-none border-none bg-transparent px-2 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+        className="text-zinc-100 placeholder:text-zinc-500 max-h-40 flex-grow resize-none border-none bg-transparent px-2 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
       />
       <ComposerAction />
     </ComposerPrimitive.Root>
@@ -211,7 +211,7 @@ const EditComposer: FC = () => {
 const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-4">
-      <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5 rounded-3xl px-5 py-2.5">
+      <div className="bg-zinc-800 text-zinc-100 max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5 rounded-3xl px-5 py-2.5">
         <MessagePrimitive.Content components={{ Text: MarkdownText }} />
       </div>
 

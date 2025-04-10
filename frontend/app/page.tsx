@@ -3,7 +3,7 @@ import { Thread } from "@/components/assistant-ui/thread";
 import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { ThreadList } from "@/components/assistant-ui/thread-list";
-import Sidebar from "../components/Sidebar";
+// import ChatInterface from '../components/assistant-ui/ChatInterface' // Removed incorrect import
 
 export default function Home() {
   // Use environment variable for API URL, fallback to local default
@@ -12,12 +12,11 @@ export default function Home() {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex flex-row h-dvh">
-        <Sidebar />
-
-        <div className="flex flex-col flex-grow">
+      <div className="flex h-screen bg-zinc-950 text-zinc-100">
+        <div className="flex-1 flex flex-col">
+          {/* <ChatInterface /> */} {/* Removed incorrect component usage */}
           <header className="p-3 border-b text-center flex-shrink-0">
-             <h1 className="text-lg font-semibold">Chaos Chain Lite Paper Chat</h1>
+             <h1 className="text-lg font-semibold">Chaos Chain Chat</h1>
           </header>
 
           <main className="flex-grow px-4 py-4 overflow-hidden flex flex-col">

@@ -1,0 +1,43 @@
+version: '3.8' # Specify docker-compose version
+
+services:
+  backend:
+    build:
+      context: . # Use the current directory as context
+      dockerfile: backend/Dockerfile # Specify the backend Dockerfile
+    container_name: chaoschain_backend
+    env_file:
+      - .env.public # Load public config first
+      - .env        # Load secrets/overrides second
+    volumes:
+      - ./backend/data:/app/data # Mount backend data directory for persistence
+      # You might also mount the code for development hot-reloading if needed
+      # - ./backend:/app 
+    ports:
+      - "8000:8000" # Map host port 8000 to container port 8000
+    networks:
+      - chaoschain_network
+
+  frontend:
+    build:
+      context: . # Use the current directory as context
+      dockerfile: frontend/Dockerfile # Specify the frontend Dockerfile
+    container_name: chaoschain_frontend
+    depends_on:
+      - backend # Wait for backend to be ready (doesn't guarantee app inside is ready)
+    ports:
+      - "3000:3000" # Map host port 3000 to container port 3000
+    environment:
+      # Override the frontend Dockerfile ENV to point to the backend service name
+      NEXT_PUBLIC_API_URL: http://backend:8000/api
+      # Pass any other necessary NEXT_PUBLIC_ variables from your .env.public or .env
+      # Example: NEXT_PUBLIC_SOME_KEY: ${NEXT_PUBLIC_SOME_KEY_FROM_ENV}
+    networks:
+      - chaoschain_network
+
+networks:
+  chaoschain_network:
+    driver: bridge # Use the default bridge network driver
+
+volumes:
+  backend_data: # Define a named volume (alternative to host mounting) 

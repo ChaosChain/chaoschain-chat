@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field, ValidationError
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 # --- End LLM Imports ---
+import uuid
+import traceback
 
 # --- MOVED Pydantic Model Definitions HERE ---
 # Model for complex content parts (like text)
@@ -51,7 +53,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins_list, # Use the pre-split list
     allow_credentials=True,
-    allow_methods=["*"] ,
+    allow_methods=["*", "OPTIONS"] , # Explicitly added OPTIONS
     allow_headers=["*"] ,
 )
 
@@ -81,56 +83,72 @@ async def startup_event():
     asyncio.create_task(update_repository_task())
 
 # Async generator for streaming the response
-async def stream_answer(query: str, rag_service: RAGService) -> AsyncGenerator[str, None]:
-    print("--- ENTERED stream_answer --- ")
-    print(f"[Stream] Generating answer for query: {query}")
+async def stream_answer(query: str, rag_service: RAGService, request_id: str) -> AsyncGenerator[str, None]:
+    print(f"[{request_id}] --- ENTERED stream_answer generator --- ")
+    print(f"[{request_id}] [Stream] Generating answer for query: '{query}'")
+    response_generated = False
     try:
+        print(f"[{request_id}] [Stream] Calling rag_service.get_answer...")
         result = await rag_service.get_answer(query)
+        response_generated = True
+        print(f"[{request_id}] [Stream] rag_service.get_answer returned: {result}") # Log the whole result
+        
         answer = result.get("answer", "Sorry, an error occurred while generating the answer.")
         sources = result.get("sources", [])
-        print(f"[Stream] RAG Service returned: Answer=\"{answer}\", Sources Count={len(sources)}")
+        print(f"[{request_id}] [Stream] Extracted: Answer='{answer}', Sources Count={len(sources)}")
 
         # --- Check for "I don't know" and replace --- 
         if answer.strip().lower() == "i don't know.":
             answer = ("I couldn't find specific information about that in the Chaos Chain litepaper. "
                       "Could you try rephrasing or asking about a different topic covered in the document?")
-            print(f"[Stream] Replaced answer with custom message.")
+            print(f"[{request_id}] [Stream] Replaced 'I don\'t know.' answer with custom message.")
         # --------------------------------------------
 
         # --- Stream Text Chunks --- 
-        # Simple word-by-word streaming for demonstration
+        print(f"[{request_id}] [Stream] Starting to stream TEXT chunks...")
         words = answer.split(' ')
         for i, word in enumerate(words):
-            chunk = word + (' ' if i < len(words) - 1 else '') # Add space back
-            yield f"0:{json.dumps(chunk)}\n" # Prefix with 0: and JSON encode
-            print(f"[Stream] Yielded TEXT chunk: 0:{json.dumps(chunk)}")
-            await asyncio.sleep(0.01) # Small delay to simulate streaming
+            chunk = word + (' ' if i < len(words) - 1 else '')
+            yield f"0:{json.dumps(chunk)}\n"
+            # print(f"[{request_id}] [Stream] Yielded TEXT chunk: 0:{json.dumps(chunk)}") # Reduce noise maybe
+            await asyncio.sleep(0.01)
+        print(f"[{request_id}] [Stream] Finished streaming TEXT chunks.")
         # --------------------------
 
         # --- Stream Sources Annotation --- 
         if sources:
-            # Ensure sources are JSON serializable (convert Path objects if needed)
-            serializable_sources = [
-                {
-                    "name": src.get("name", "Unknown Source"), 
-                    "url": src.get("url", "#"), 
-                    "page_content": src.get("page_content", "") 
-                } 
-                for src in sources
-            ]
-            sources_json_str = json.dumps(serializable_sources)
-            yield f"2:{sources_json_str}\n" # Prefix with 2:
-            print(f"[Stream] Yielded SOURCES annotation: 2:{sources_json_str}")
+            print(f"[{request_id}] [Stream] Starting to stream SOURCES annotation...")
+            try:
+                serializable_sources = [
+                    {
+                        "name": src.get("name", "Unknown Source"), 
+                        "url": src.get("url", "#"), 
+                        "page_content": src.get("page_content", "") 
+                    } 
+                    for src in sources
+                ]
+                sources_json_str = json.dumps(serializable_sources)
+                yield f"2:{sources_json_str}\n"
+                print(f"[{request_id}] [Stream] Yielded SOURCES annotation: 2:{sources_json_str[:100]}...") # Log truncated sources
+            except Exception as e_json:
+                 print(f"[{request_id}] [Stream] Error serializing sources: {e_json}")
+                 error_message = f"Error processing sources: {e_json}"
+                 yield f"0:{json.dumps(error_message)}\n"
+        else:
+             print(f"[{request_id}] [Stream] No sources to stream.")
          # --------------------------
 
     except Exception as e:
-        print(f"[Stream] Error during answer generation: {e}")
-        error_message = f"Sorry, an internal error occurred: {e}"
-        yield f"0:{json.dumps(error_message)}\n"
-        print(f"[Stream] Yielded ERROR chunk: 0:{json.dumps(error_message)}")
+        print(f"[{request_id}] [Stream] Error during answer generation/streaming: {e}")
+        traceback.print_exc()
+        error_message = f"Sorry, an internal error occurred during streaming: {e}"
+        try:
+            yield f"0:{json.dumps(error_message)}\n"
+            print(f"[{request_id}] [Stream] Yielded ERROR chunk: 0:{json.dumps(error_message)}")
+        except Exception as yield_e:
+            print(f"[{request_id}] [Stream] CRITICAL: Failed even to yield error message: {yield_e}")
     finally:
-        print("--- EXITING stream_answer --- ")
-        print("[Stream] Finished streaming.")
+        print(f"[{request_id}] --- EXITING stream_answer generator (Response Generated: {response_generated}) --- ")
 
 # --- Add LLM Preprocessing Function --- 
 async def preprocess_query(query: str) -> str:
@@ -185,54 +203,103 @@ async def handle_chat_request(
     raw_request: Request,
     rag_service_instance: RAGService = Depends(get_rag_service)
 ):
-    print("--- ENTERED handle_chat_request --- ")
+    request_id = str(uuid.uuid4())
+    print(f"--- ENTERED handle_chat_request (ID: {request_id}) --- ")
+    
     # Manually parse and validate the request body
     try:
-        body = await raw_request.json()
-        print(f"[API] Received raw request body: {body}")
+        print(f"[{request_id}] Attempting to read request body...")
+        body_bytes = await raw_request.body()
+        body_str = body_bytes.decode('utf-8') # Decode for logging
+        print(f"[{request_id}] Raw request body received (decoded): {body_str}")
+        
+        print(f"[{request_id}] Attempting to parse JSON...")
+        body = json.loads(body_str) # Parse decoded string
+        print(f"[{request_id}] JSON parsed successfully: {body}")
+        
+        print(f"[{request_id}] Attempting to validate payload with Pydantic...")
         request = VercelChatRequest.model_validate(body)
-        print(f"[API] Successfully validated request payload: {request.dict()}")
+        print(f"[{request_id}] Pydantic validation successful: {request.dict()}")
+        
+    except json.JSONDecodeError as e:
+        print(f"[{request_id}] Error: Invalid JSON received. Error: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid JSON body: {e}")
     except ValidationError as e:
-        print(f"[API] Pydantic Validation Error: {e.errors()}")
+        print(f"[{request_id}] Pydantic Validation Error: {e.errors()}")
         raise HTTPException(status_code=422, detail=e.errors())
-    except json.JSONDecodeError:
-        print("[API] Error: Invalid JSON received")
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    except Exception as e:
+        print(f"[{request_id}] Unexpected error during request parsing/validation: {e}")
+        traceback.print_exc() # Print full traceback
+        raise HTTPException(status_code=500, detail=f"Server error during request processing: {e}")
     
-    if not request.messages or request.messages[-1].role != 'user':
-        print("[API] Validation Error: Last message not from user")
-        raise HTTPException(status_code=400, detail="Invalid request: Last message must be from user.")
-    
-    last_message = request.messages[-1]
+    # Extract Query
     query = ""
-    # Extract query based on content type
-    if isinstance(last_message.content, str):
-        query = last_message.content
-    elif isinstance(last_message.content, list):
-        text_part = next((part for part in last_message.content if part.type == 'text' and part.text is not None), None)
-        if text_part:
-            query = text_part.text
-    
-    print(f"[API] Extracted query: {query}")
-    if not query:
-        print("[API] Validation Error: Query is empty or invalid content structure")
-        raise HTTPException(status_code=400, detail="Query cannot be empty or content structure is invalid")
+    try:
+        print(f"[{request_id}] Attempting to extract query from validated request...")
+        if not request.messages or request.messages[-1].role != 'user':
+            print(f"[{request_id}] Validation Error: Last message not from user or no messages.")
+            raise HTTPException(status_code=400, detail="Invalid request: Last message must be from user.")
+        
+        last_message = request.messages[-1]
+        # Extract query based on content type
+        if isinstance(last_message.content, str):
+            query = last_message.content
+            print(f"[{request_id}] Extracted query from string content: '{query}'")
+        elif isinstance(last_message.content, list):
+            text_part = next((part for part in last_message.content if part.type == 'text' and part.text is not None), None)
+            if text_part:
+                query = text_part.text
+                print(f"[{request_id}] Extracted query from list content: '{query}'")
+            else:
+                 print(f"[{request_id}] No text part found in list content.")
+        else:
+             print(f"[{request_id}] Unexpected content type in last message: {type(last_message.content)}")
+        
+        if not query:
+            print(f"[{request_id}] Validation Error: Query is empty after extraction.")
+            raise HTTPException(status_code=400, detail="Query cannot be empty or content structure is invalid")
+            
+    except HTTPException: # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        print(f"[{request_id}] Unexpected error during query extraction: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error during query extraction: {e}")
 
     # --- Preprocess Query --- 
-    corrected_query = await preprocess_query(query)
+    corrected_query = ""
+    try:
+        print(f"[{request_id}] Attempting to preprocess query: '{query}'")
+        corrected_query = await preprocess_query(query)
+        print(f"[{request_id}] Preprocessing completed. Result: '{corrected_query}'")
+    except Exception as e:
+        print(f"[{request_id}] Error during preprocessing query '{query}': {e}")
+        traceback.print_exc()
+        # Decide if we should proceed with original query or raise 500
+        # For now, let's raise 500 as preprocessing is critical
+        raise HTTPException(status_code=500, detail=f"Server error during query preprocessing: {e}")
     # ----------------------
 
-    print("--- BEFORE StreamingResponse --- ")
-    print("[API] Returning StreamingResponse formatted for Vercel AI SDK")
-    return StreamingResponse(
-        # Use the corrected query
-        stream_answer(corrected_query, rag_service_instance),
-        media_type="text/plain"
-    )
+    print(f"[{request_id}] --- BEFORE Creating StreamingResponse --- ")
+    print(f"[{request_id}] [API] Returning StreamingResponse formatted for Vercel AI SDK using corrected query: '{corrected_query}'")
+    try:
+        return StreamingResponse(
+            # Use the corrected query
+            stream_answer(corrected_query, rag_service_instance, request_id), # Pass request_id
+            media_type="text/plain"
+        )
+    except Exception as e:
+         print(f"[{request_id}] Error creating or returning StreamingResponse: {e}")
+         traceback.print_exc()
+         # Fallback to a standard error response if streaming fails catastrophically
+         return JSONResponse(
+             status_code=500, 
+             content={"detail": f"Server error during response streaming setup: {e}"}
+         )
 
-@app.get("/api/info")
-async def get_info():
-    """Endpoint to get repository information, like last update time."""
+@app.get("/api/sources")
+async def get_sources():
+    """Endpoint to get repository source information, like last update time."""
     last_update_time = "N/A"
     try:
         if settings.is_github_repo and settings.repo_name:

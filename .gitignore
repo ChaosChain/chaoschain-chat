@@ -34,4 +34,8 @@ frontend/build/
 Thumbs.db
 
 # Project specific
-data/vector_store/ 
+data/vector_store/
+
+# Docker
+backend/data/
+frontend/.next/ 
