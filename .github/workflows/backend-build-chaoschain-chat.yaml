@@ -3,7 +3,7 @@ name: Build and Push ChaosChain-Chat Backend Images to JFrog
 on:
   push:
     branches:
-      - ci-build  # to be changed to main once everythng looks good
+      - main
 
 env:
   DOCKER_REGISTRY: nethermind.jfrog.io
