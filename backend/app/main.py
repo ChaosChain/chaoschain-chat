@@ -16,6 +16,8 @@ from langchain_core.messages import SystemMessage, HumanMessage
 # --- End LLM Imports ---
 import uuid
 import traceback
+# --- Add context manager for lifespan ---
+from contextlib import asynccontextmanager
 
 # --- MOVED Pydantic Model Definitions HERE ---
 # Model for complex content parts (like text)
@@ -38,13 +40,25 @@ print(f"- Vector DB: {settings.vector_db_dir}")
 print(f"- Embedding Model: {settings.embedding_model_name}")
 print(f"- LLM: {settings.openai_chat_model}")
 
-app = FastAPI(
-    title="ChaosChain Litepaper RAG API",
-    description="API for querying the ChaosChain Litepaper using RAG.",
-    version="0.1.0"
-)
+# --- Lifespan Management for Startup Initialization ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Code here runs on startup
+    print("--- Application Startup ---")
+    print("Initializing RAG Service...")
+    start_time = time.time()
+    get_rag_service() # Initialize the singleton instance
+    end_time = time.time()
+    print(f"RAG Service initialized in {end_time - start_time:.2f} seconds.")
+    print("--- Application Ready ---")
+    yield
+    # Code here runs on shutdown (if needed)
+    print("--- Application Shutdown ---")
 
-# CORS Configuration
+# Initialize FastAPI app with lifespan
+app = FastAPI(title="ChaosChain Litepaper RAG API", lifespan=lifespan)
+
+# Configure CORS
 print(f"--- Configuring CORS --- Allowed Origins Raw: {settings.cors_origins}")
 allowed_origins_list = settings.cors_origins.split(",")
 print(f"--- Configuring CORS --- Allowed Origins List: {allowed_origins_list}")
