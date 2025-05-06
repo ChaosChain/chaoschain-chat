@@ -18,9 +18,10 @@ COPY frontend/ .
 # Build the Next.js application for production
 RUN npm run build
 
+ARG NEXT_PUBLIC_API_URL
 # Define environment variable for the API URL
 # This will be overridden by docker-compose to point to the backend service
-ENV NEXT_PUBLIC_API_URL='http://localhost:8000/api'
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 # Add any other public ENV vars needed by the frontend build or runtime
 
 # Expose port 3000

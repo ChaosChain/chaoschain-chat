@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
+      - test/ci
 
 env:
   DOCKER_REGISTRY: nethermind.jfrog.io
   DOCKER_REPO: productsvents-oci-local-dev
+  NEXT_PUBLIC_API_URL: https://api.chaoschain-chat.dev-nethermind.xyz/api/chat
 
 permissions:
   id-token: write
@@ -56,4 +58,6 @@ jobs:
             ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPO }}/chaoschain-chat-frontend:latest
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache
+        build-args: |
+          NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
 
