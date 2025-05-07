@@ -7,7 +7,9 @@ on:
 
 env:
   DOCKER_REGISTRY: nethermind.jfrog.io
-  DOCKER_REPO: productsvents-oci-local-dev
+  JFROG_REPOSITORY: productsvents-oci-local-dev
+  AGENT_NAME: chaoschain-chat-frontend
+  NEXT_PUBLIC_API_URL: https://api.chaoschain-chat.dev-nethermind.xyz/api/chat
 
 permissions:
   id-token: write
@@ -20,40 +22,43 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-    - name: Check if Docker is installed
-      run: |
-        if ! command -v docker &> /dev/null
-        then
-          sudo apt-get update
-          sudo apt-get install -y docker.io
-          sudo apt-get install -y docker-compose
-        fi
-    
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Log in to JFrog Docker Registry
-      run: docker login ${{ env.DOCKER_REGISTRY }} -u ${{ secrets.ARTIFACTORY_PRODUCTSVENTS_USERNAME }} -p ${{ secrets.ARTIFACTORY_PRODUCTSVENTS_TOKEN_DEVELOPER }}
+    - name: Set up ORAS
+      uses: oras-project/setup-oras@v1
 
-    - name: Cache Docker layers
-      uses: actions/cache@v4
+    - name: Verify ORAS version
+      run: oras version
+
+    - name: Log in to Docker registry
+      uses: docker/login-action@v3
       with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ secrets.ARTIFACTORY_PRODUCTSVENTS_USERNAME }}
+        password: ${{ secrets.ARTIFACTORY_PRODUCTSVENTS_TOKEN_DEVELOPER }}
 
-    - name: Build and push frontend image
+    - name: Login to registry with ORAS
+      run: |
+        oras login ${{ env.DOCKER_REGISTRY }} \
+          -u ${{ secrets.ARTIFACTORY_PRODUCTSVENTS_USERNAME }} \
+          -p ${{ secrets.ARTIFACTORY_PRODUCTSVENTS_TOKEN_DEVELOPER }}
+
+    - name: Build and push Docker image
       uses: docker/build-push-action@v6
       with:
         context: .
-        file: frontend/Dockerfile
         platforms: "linux/arm64"
         push: true
+        file: ./frontend/Dockerfile
         tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPO }}/chaoschain-chat-frontend:${{ github.sha }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPO }}/chaoschain-chat-frontend:latest
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache
-
+          ${{ env.DOCKER_REGISTRY }}/${{ env.JFROG_REPOSITORY }}/${{ env.AGENT_NAME }}:${{ github.sha }}
+          ${{ env.DOCKER_REGISTRY }}/${{ env.JFROG_REPOSITORY }}/${{ env.AGENT_NAME }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          GITHUB_SHA=${{ github.sha }}
+          NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
