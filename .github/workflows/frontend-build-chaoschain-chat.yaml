@@ -8,7 +8,7 @@ on:
 
 env:
   DOCKER_REGISTRY: nethermind.jfrog.io
-  DOCKER_REPO: productsvents-oci-local-dev
+  JFROG_REPOSITORY: productsvents-oci-local-dev
   AGENT_NAME: chaoschain-chat-frontend
   NEXT_PUBLIC_API_URL: https://api.chaoschain-chat.dev-nethermind.xyz/api/chat
 
